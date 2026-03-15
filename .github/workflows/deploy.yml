@@ -1,0 +1,59 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      id-token: write
+      contents: read
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+    
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        npm install -g aws-cdk
+        pip install -r requirements.txt
+    
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: us-east-1
+    
+    - name: Bootstrap CDK
+      run: |
+        cd infrastructure/cdk
+        cdk bootstrap
+    
+    - name: Deploy CDK Stack
+      run: |
+        cd infrastructure/cdk
+        cdk deploy --require-approval never
+    
+    - name: Test deployment
+      run: |
+        # Get API Gateway URL from CDK output
+        API_URL=$(aws cloudformation describe-stacks --stack-name CodeToBrdStack --query 'Stacks[0].Outputs[?OutputKey==`ApiGatewayUrl`].OutputValue' --output text)
+        curl -f $API_URL/health
+
+
+
